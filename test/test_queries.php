@@ -145,7 +145,7 @@
     Tester::check_equal("Raw WHERE clause with '%'", $expected);
 
     ORM::for_table('widget')->where_raw('`phrase` = \'G\\\'day?\' AND ref = ?', array(7))->find_many();
-    $expected = "SELECT * FROM `widget` WHERE `phrase` = 'G\\'day?' AND ref = 7";
+    $expected = "SELECT * FROM `widget` WHERE `phrase` = 'G\\'day?' AND ref = '7'";
     Tester::check_equal("Raw WHERE clause with '?' not as parameter", $expected);
 
     ORM::for_table('widget')->where_raw('`name` = "Fred"')->find_many();
