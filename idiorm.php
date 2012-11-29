@@ -281,6 +281,9 @@
          * query isn't executed like this (PDO normally passes the query and
          * parameters to the database which takes care of the binding) but
          * doing it this way makes the logged queries more readable.
+         * @author Jeff Roberson <ridgerunner@fluxbb.org>
+         * @author Simon Holywell <treffynnon@php.net>
+         * @link http://stackoverflow.com/a/13370709/461813 StackOverflow answer with the regexp
          */
         protected static function _log_query($query, $parameters) {
             // If logging is not enabled, do nothing
@@ -297,7 +300,24 @@
 
                 // Replace placeholders in the query for vsprintf
                 if(false !== strpos($query, "'") || false !== strpos($query, '"')) {
-                    $query = IdiormString::str_replace_outside_quotes("?", "%s", $query);
+                    $re_parse = '/
+                        # Match one chunk of a valid string having embedded quoted substrings.
+                          (                         # Either $1: Quoted chunk.
+                            "[^"\\\\]*(?:\\\\.[^"\\\\]*)*"  # Either a double quoted chunk,
+                          | \'[^\'\\\\]*(?:\\\\.[^\'\\\\]*)*\'  # or a single quoted chunk.
+                          )                         # End $1: Quoted chunk.
+                        | ([^\'"\\\\]+)             # or $2: an unquoted chunk (no escapes).
+                        /sx';
+                    $query = preg_replace_callback(
+                        $re_parse,
+                        function ($matches) {
+                            // Return quoted string chunks (in group $1) unaltered.
+                            if ($matches[1]) return $matches[1];
+                            // Process only unquoted chunks (in group $2).
+                            return preg_replace('/'. preg_quote('?', '/') .'/',
+                                '%s', $matches[2]);
+                        },
+                        $query);
                 } else {
                     $query = str_replace("?", "%s", $query);
                 }
@@ -1402,35 +1422,5 @@
 
         public function __isset($key) {
             return isset($this->_data[$key]);
-        }
-    }
-
-    /**
-     * A class to handle str_replace operations that involve quoted strings
-     * @example IdiormString::str_replace_outside_quotes('?', '%s', 'columnA = "Hello?" AND columnB = ?');
-     * @author Jeff Roberson <ridgerunner@fluxbb.org>
-     * @author Simon Holywell <treffynnon@php.net>
-     * @link http://stackoverflow.com/a/13370709/461813 StackOverflow answer
-     */
-    class IdiormString {
-        public static function str_replace_outside_quotes($search, $replace, $subject) {
-            $re_parse = '/
-                # Match one chunk of a valid string having embedded quoted substrings.
-                  (                         # Either $1: Quoted chunk.
-                    "[^"\\\\]*(?:\\\\.[^"\\\\]*)*"  # Either a double quoted chunk,
-                  | \'[^\'\\\\]*(?:\\\\.[^\'\\\\]*)*\'  # or a single quoted chunk.
-                  )                         # End $1: Quoted chunk.
-                | ([^\'"\\\\]+)             # or $2: an unquoted chunk (no escapes).
-                /sx';
-            return preg_replace_callback(
-                $re_parse,
-                function ($matches) use ($search, $replace) {
-                    // Return quoted string chunks (in group $1) unaltered.
-                    if ($matches[1]) return $matches[1];
-                    // Process only unquoted chunks (in group $2).
-                    return preg_replace('/'. preg_quote($search, '/') .'/',
-                        $replace, $matches[2]);
-                },
-                $subject);
         }
     }
